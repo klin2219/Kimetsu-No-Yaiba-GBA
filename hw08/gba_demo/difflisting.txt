@@ -1,0 +1,712 @@
+======== main1.c ==========
+
+
+#define REG_DISPCTL (*(volatile unsigned short *)0x4000000)
+#define MODE3 (3)
+#define BG2 (1<<10)
+
+volatile unsigned short *videoBuffer = (unsigned short *)0x6000000;
+int main(int argc, char *argv[]) {
+	REG_DISPCTL = MODE3 | BG2;
+
+	videoBuffer[1208] = 0x7fff;
+
+
+}
+
+
+
+
+
+======== main1.c to main2.c ==========
+2d1
+< 
+5a5,6
+> #define SCREEN_HEIGHT 160
+> #define SCREEN_WIDTH 240
+7c8,14
+< volatile unsigned short *videoBuffer = (unsigned short *)0x6000000;
+---
+> #define OFFSET(r, c, rowlen) ((r)*(rowlen)+(c))
+> 
+> //Prototypes
+> void setPixel(int row, int col, unsigned short color);
+> 
+> 
+> // Bouncing ball demo
+11,12c18
+< 	videoBuffer[1208] = 0x7fff;
+< 
+---
+> 	setPixel(SCREEN_HEIGHT / 2, SCREEN_WIDTH / 2, 0x7fff);
+17a24,27
+> volatile unsigned short *videoBuffer = (unsigned short *)0x6000000;
+> 
+> void setPixel(int row, int col, unsigned short color) {
+>         *(videoBuffer + OFFSET(row, col, SCREEN_WIDTH) ) = color;
+18a29
+> }
+======== main2.c to main3.c ==========
+0a1,2
+> extern volatile unsigned short *videoBuffer;
+> 
+9a12,23
+> #define COLOR(r, g, b) ((b)<<10 | (g)<<5 | (r))
+> #define WHITE COLOR(31,31,31)
+> #define BLACK COLOR(0,0,0)
+> #define RED COLOR(31,0,0)
+> #define BLUE COLOR(0,0,31)
+> #define GREEN COLOR(0,31,0)
+> #define GREY COLOR(16,16,16)
+> #define YELLOW COLOR(31,31,0)
+> #define CYAN COLOR(0,31,31)
+> #define MAGENTA COLOR(31,0,31)
+> 
+> 
+18c32
+< 	setPixel(SCREEN_HEIGHT / 2, SCREEN_WIDTH / 2, 0x7fff);
+---
+>         setPixel(SCREEN_HEIGHT / 2, SCREEN_WIDTH / 2, RED);
+22,23d35
+< 
+< 
+======== main3.c to main4.c ==========
+1,2d0
+< extern volatile unsigned short *videoBuffer;
+< 
+25a24
+> void drawRect(int row, int col, int width, int height, unsigned short color);
+32c31
+<         setPixel(SCREEN_HEIGHT / 2, SCREEN_WIDTH / 2, RED);
+---
+> 	drawRect(30, 40, 5, 5, RED);
+35a35,36
+> 
+> 
+42a44,51
+> void drawRect(int row, int col, int width, int height, unsigned short color) {
+>         for(int r=0; r<height; r++) {
+>               for(int c=0; c<width; c++)
+>                       setPixel(row+r, col+c, color);
+> 
+>         }
+> }
+> 
+======== main4.c to main5.c ==========
+1d0
+< 
+24a24
+> int rand(void);
+31c31,82
+< 	drawRect(30, 40, 5, 5, RED);
+---
+> 	// What it takes to define a ball
+> 	struct ball {
+> 		int row;
+> 		int col;
+> 		int rd;
+> 		int cd;
+> 		unsigned short color;
+> 	};
+> 
+> 	struct ball ball;
+> 	
+> 	int size;
+> 
+> 	// initialize the parameters for bouncing
+> 	size = 5;
+> 	struct ball *bp = &ball;
+> 	bp->row = 0;
+> 	bp->col = 0;
+> 	bp->rd = 1;
+> 	bp->cd = 1;
+> 	bp->color = RED;
+> 
+> 	// Run forever (or until the power runs out)
+> 	while (1) {
+> 
+> 		// See if we need to bounce off a wall
+> 		bp = &ball;
+> 		bp->row = bp->row + bp->rd;
+> 		bp->col += bp->cd;
+> 		if(bp->row < 0) {
+> 			bp->row = 0;
+> 			bp->rd = -bp->rd;
+> 		}
+> 		if(bp->row > SCREEN_HEIGHT) {
+> 			bp->row = SCREEN_HEIGHT;
+> 			bp->rd = -bp->rd;
+> 		}
+> 		if(bp->col < 0) {
+> 			bp->col = 0;
+> 			bp->cd = -bp->cd;
+> 			}
+> 		if(bp->col > SCREEN_WIDTH) {
+> 			bp->col = SCREEN_WIDTH;
+> 			bp->cd = -bp->cd;
+> 		}
+> 
+> 		// Draw the ball
+> 		drawRect(bp->row, bp->col,
+> 			size, size,
+> 			bp->color);
+> 
+> 	} // Game Loop
+======== main5.c to main6.c ==========
+30a31,32
+> 	unsigned short bgcolor = BLACK;
+> 
+40,41c42,43
+< 	struct ball ball;
+< 	
+---
+> 	// All the info for the current state of the game
+> 	struct state {
+42a45,52
+> 		struct ball balls;
+> 	};
+> 
+> 	struct ball *bp, *obp;
+> 
+> 	// current and previous states
+> 	struct state cs, ps;
+> 
+45,46c55,56
+< 	size = 5;
+< 	struct ball *bp = &ball;
+---
+> 	cs.size = 5;
+> 	bp = &cs.balls;
+55a66,68
+> 		// Keep track of the state we're about to overwrite
+> 		ps = cs;
+> 
+57c70
+< 		bp = &ball;
+---
+> 		bp = &cs.balls;
+77c90,97
+< 		// Draw the ball
+---
+> 		// Erase the old ball
+> 		obp = &ps.balls;
+> 		drawRect(obp->row, obp->col,
+> 				ps.size, ps.size,
+> 				bgcolor);
+> 
+> 		// Draw the new ball
+> 		bp = &cs.balls;
+79c99
+< 			size, size,
+---
+> 			cs.size, cs.size,
+======== main6.c to main7.c ==========
+23a24
+> void delay(int n);
+89a91,93
+> 		// Wait to update the screen
+> 		delay(1);
+> 
+122a127,134
+> void delay(int n) {
+>         // delay for n tenths of a second
+>         volatile int x = 0;
+>         for (int i=0; i<n*8000; i++)
+>                 x++;
+> }
+> 
+> 
+======== main7.c to main8.c ==========
+78,79c78,79
+< 		if(bp->row > SCREEN_HEIGHT) {
+< 			bp->row = SCREEN_HEIGHT;
+---
+> 		if(bp->row > SCREEN_HEIGHT-cs.size) {
+> 			bp->row = SCREEN_HEIGHT - cs.size;
+86,87c86,87
+< 		if(bp->col > SCREEN_WIDTH) {
+< 			bp->col = SCREEN_WIDTH;
+---
+> 		if(bp->col > SCREEN_WIDTH-cs.size) {
+> 			bp->col = SCREEN_WIDTH - cs.size;
+134d133
+< 
+======== main8.c to main9.c ==========
+20a21,22
+> #define SCANLINECOUNTER *(volatile short *)0x4000006
+> 
+24a27
+> void waitForVBlank(void);
+91,92c94,95
+< 		// Wait to update the screen
+< 		delay(1);
+---
+> 		// Wait for a Vblank to update the screen
+> 		waitForVBlank();
+133a137,142
+> void waitForVBlank(void) {
+>         while (SCANLINECOUNTER> 160)
+>                 ;
+>         while (SCANLINECOUNTER < 160)
+>                 ;
+> }
+======== main9.c to main10.c ==========
+0a1,2
+> extern volatile unsigned short *videoBuffer;
+> 
+22a25,43
+> // Buttons
+> #define BUTTONS *(volatile unsigned int *)0x4000130
+> 
+> #define BUTTON_A 0
+> #define BUTTON_B 1
+> #define BUTTON_SELECT 2
+> #define BUTTON_START 3
+> #define BUTTON_RIGHT 4
+> #define BUTTON_LEFT 5
+> #define BUTTON_UP 6
+> #define BUTTON_DOWN 7
+> #define BUTTON_L 8
+> #define BUTTON_R 9
+> 
+> #define NBUTTONS (10)
+> 
+> #define KEY_DOWN(key, buttons) (~(buttons) & (1<<key))
+> 
+> 
+34a56,57
+> 	int buttonWasDown[NBUTTONS] = {0};
+> 
+72a96,113
+> 		// Update button status
+> 		for (int i=0; i<NBUTTONS; i++) {
+> 			buttonWasDown[i] = KEY_DOWN(i, BUTTONS) != 0;
+> 		}
+> 
+> 		// See if we need to do something with buttons
+> 		if (buttonWasDown[BUTTON_UP]) {
+> 			cs.size++;
+> 			if(cs.size>150) {
+> 				cs.size = 150;
+> 			}
+> 		}
+> 		if (buttonWasDown[BUTTON_DOWN]) {
+> 			cs.size--;
+> 			if(cs.size<3) {
+> 				cs.size = 3;
+> 			}
+> 		}
+======== main10.c to main11.c ==========
+43d42
+< 
+56a56
+> 	int buttonJustReleased[NBUTTONS] = {0};
+97a98
+> 			buttonJustReleased[i] = KEY_DOWN(i, BUTTONS) == 0 && buttonWasDown[i];
+102c103
+< 		if (buttonWasDown[BUTTON_UP]) {
+---
+> 		if (buttonJustReleased[BUTTON_UP]) {
+108c109
+< 		if (buttonWasDown[BUTTON_DOWN]) {
+---
+> 		if (buttonJustReleased[BUTTON_DOWN]) {
+======== main11.c to main12.c ==========
+59a60,64
+> 	enum gamestate {
+> 		GS_INITBOUNCE,
+> 		GS_BOUNCE
+> 	};
+> 
+70a76
+> 		enum gamestate gamestate;
+80,88c86
+< 
+< 	// initialize the parameters for bouncing
+< 	cs.size = 5;
+< 	bp = &cs.balls;
+< 	bp->row = 0;
+< 	bp->col = 0;
+< 	bp->rd = 1;
+< 	bp->cd = 1;
+< 	bp->color = RED;
+---
+> 	cs.gamestate = GS_INITBOUNCE;
+101a100,104
+> 		// Compute the graphics needed for the current state
+> 		switch (cs.gamestate) {
+> 
+> 		// Balls are bouncing — act on buttons calculate positions
+> 		case GS_BOUNCE:
+134a138,151
+> 			break;
+> 
+> 		case GS_INITBOUNCE:
+> 			// initialize the parameters for bouncing
+> 			cs.size = 5;
+> 			bp = &cs.balls;
+> 			bp->row = 0;
+> 			bp->col = 0;
+> 			bp->rd = 1;
+> 			bp->cd = 1;
+> 			bp->color = RED;
+> 			break;
+> 
+> 		}
+139c156,167
+< 		// Erase the old ball
+---
+> 		// Do the drawing and choose the next state
+> 		switch (cs.gamestate) {
+> 
+> 		// Draw the initial splash screen image
+> 		// Initialize the balls for bouncing
+> 		case GS_INITBOUNCE:
+> 			cs.gamestate = GS_BOUNCE;
+> 			break;
+> 
+> 		// Bounce the balls around
+> 		case GS_BOUNCE:
+> 			// Erase the old balls
+145c173
+< 		// Draw the new ball
+---
+> 			// Draw the new balls
+150a179,182
+> 			break;
+> 
+> 		}
+> 
+======== main12.c to main13.c ==========
+1,2d0
+< extern volatile unsigned short *videoBuffer;
+< 
+42a41,45
+> 
+> #define MAX_BALLS (8)
+> 
+> 
+> 
+57a61,64
+> 	int deltas[] = { -3, -2, -1, 1, 2, 3 };
+> 	int ndeltas = sizeof(deltas) / sizeof(deltas[0]);
+> 	int colors[] = { RED, BLUE, GREEN, WHITE, CYAN, YELLOW, MAGENTA };
+> 	int ncolors = sizeof(colors) / sizeof(colors[0]);
+78c85,86
+< 		struct ball balls;
+---
+> 		int nballs;
+> 		struct ball balls[MAX_BALLS];
+119c127,128
+< 			bp = &cs.balls;
+---
+> 			for (int i = 0; i < cs.nballs; i++) {
+> 				bp = &cs.balls[i];
+137a147
+> 			}
+141a152
+> 			cs.nballs = MAX_BALLS;
+143,148c154,160
+< 			bp = &cs.balls;
+< 			bp->row = 0;
+< 			bp->col = 0;
+< 			bp->rd = 1;
+< 			bp->cd = 1;
+< 			bp->color = RED;
+---
+> 			for (int i = 0; i < cs.nballs; i++) {
+> 				cs.balls[i].row = rand() % SCREEN_HEIGHT;
+> 				cs.balls[i].col = rand() % SCREEN_WIDTH;
+> 				cs.balls[i].rd = deltas[rand() % ndeltas];
+> 				cs.balls[i].cd = deltas[rand() % ndeltas];
+> 				cs.balls[i].color = colors[i % ncolors];
+> 			}
+168c180,181
+< 			obp = &ps.balls;
+---
+> 			for (int i = 0; i < ps.nballs; i++) {
+> 				obp = &ps.balls[i];
+171a185
+> 			}
+174c188,189
+< 			bp = &cs.balls;
+---
+> 			for (int i = 0; i < cs.nballs; i++) {
+> 				bp = &cs.balls[i];
+177a193
+> 			}
+======== main13.c to main14.c ==========
+0a1
+> 
+125a127,134
+> 			if(buttonJustReleased[BUTTON_LEFT]) {
+> 				if (cs.nballs > 1)
+> 					cs.nballs--;
+> 			}
+> 			if(buttonJustReleased[BUTTON_RIGHT]) {
+> 				if (cs.nballs < MAX_BALLS)
+> 					cs.nballs++;
+> 			}
+======== main14.c to main15.c ==========
+0a1
+> #include "DMA.h"
+42d42
+< 
+221a222,223
+>         volatile unsigned short lcolor;
+>         lcolor = color;
+223,224c225,226
+<               for(int c=0; c<width; c++)
+<                       setPixel(row+r, col+c, color);
+---
+> //              for(int c=0; c<width; c++)
+> //                      setPixel(row+r, col+c, color);
+225a228,230
+>                 DMA[3].src = &lcolor;
+>                 DMA[3].dst = &videoBuffer[OFFSET(row+r,col,SCREEN_WIDTH)];
+>                 DMA[3].cnt = width | DMA_ON | DMA_SOURCE_FIXED | DMA_DESTINATION_INCREMENT;
+======== main15.c to main16.c ==========
+1,53c1
+< #include "DMA.h"
+< 
+< #define REG_DISPCTL (*(volatile unsigned short *)0x4000000)
+< #define MODE3 (3)
+< #define BG2 (1<<10)
+< #define SCREEN_HEIGHT 160
+< #define SCREEN_WIDTH 240
+< 
+< #define OFFSET(r, c, rowlen) ((r)*(rowlen)+(c))
+< 
+< #define COLOR(r, g, b) ((b)<<10 | (g)<<5 | (r))
+< #define WHITE COLOR(31,31,31)
+< #define BLACK COLOR(0,0,0)
+< #define RED COLOR(31,0,0)
+< #define BLUE COLOR(0,0,31)
+< #define GREEN COLOR(0,31,0)
+< #define GREY COLOR(16,16,16)
+< #define YELLOW COLOR(31,31,0)
+< #define CYAN COLOR(0,31,31)
+< #define MAGENTA COLOR(31,0,31)
+< 
+< 
+< #define SCANLINECOUNTER *(volatile short *)0x4000006
+< 
+< // Buttons
+< #define BUTTONS *(volatile unsigned int *)0x4000130
+< 
+< #define BUTTON_A 0
+< #define BUTTON_B 1
+< #define BUTTON_SELECT 2
+< #define BUTTON_START 3
+< #define BUTTON_RIGHT 4
+< #define BUTTON_LEFT 5
+< #define BUTTON_UP 6
+< #define BUTTON_DOWN 7
+< #define BUTTON_L 8
+< #define BUTTON_R 9
+< 
+< #define NBUTTONS (10)
+< 
+< #define KEY_DOWN(key, buttons) (~(buttons) & (1<<key))
+< 
+< #define MAX_BALLS (8)
+< 
+< 
+< 
+< //Prototypes
+< void setPixel(int row, int col, unsigned short color);
+< void drawRect(int row, int col, int width, int height, unsigned short color);
+< void delay(int n);
+< void waitForVBlank(void);
+< int rand(void);
+< 
+---
+> #include "lib.h"
+211,246d158
+< 
+< 
+< 
+< volatile unsigned short *videoBuffer = (unsigned short *)0x6000000;
+< 
+< void setPixel(int row, int col, unsigned short color) {
+<         *(videoBuffer + OFFSET(row, col, SCREEN_WIDTH) ) = color;
+< 
+< }
+< 
+< void drawRect(int row, int col, int width, int height, unsigned short color) {
+<         volatile unsigned short lcolor;
+<         lcolor = color;
+<         for(int r=0; r<height; r++) {
+< //              for(int c=0; c<width; c++)
+< //                      setPixel(row+r, col+c, color);
+< 
+<                 DMA[3].src = &lcolor;
+<                 DMA[3].dst = &videoBuffer[OFFSET(row+r,col,SCREEN_WIDTH)];
+<                 DMA[3].cnt = width | DMA_ON | DMA_SOURCE_FIXED | DMA_DESTINATION_INCREMENT;
+<         }
+< }
+< 
+< void delay(int n) {
+<         // delay for n tenths of a second
+<         volatile int x = 0;
+<         for (int i=0; i<n*8000; i++)
+<                 x++;
+< }
+< 
+< void waitForVBlank(void) {
+<         while (SCANLINECOUNTER> 160)
+<                 ;
+<         while (SCANLINECOUNTER < 160)
+<                 ;
+< }
+======== main16.c to main17.c ==========
+14a15
+> 	int score = 0;
+90a92
+> 					score++;
+151a154,159
+> 			// Erase and draw the new score
+> 			char buffer[51];
+> 			sprintf(buffer, "Score: %d", score);
+> 			drawRect(150, 5, 200, 10, bgcolor);
+> 			drawString(150, 5, buffer, YELLOW);
+> 
+======== main17.c to main18.c ==========
+17a18,20
+> 		GS_INITSPLASH,
+> 		GS_DRAWSPLASH,
+> 		GS_WAITSPLASH,
+19c22,24
+< 		GS_BOUNCE
+---
+> 		GS_BOUNCE,
+> 		GS_PAUSE,
+> 		GS_QUIT
+35a41
+> 		int splashnballs;
+44c50,60
+< 	cs.gamestate = GS_INITBOUNCE;
+---
+> 	// Gamestate transitions:
+> 	//	GS_INITSPLASH -> GS_DRAWSPLASH
+> 	//	GS_DRAWSPLASH -> GS->WAITSPLASH (when all balls dropped)
+> 	//	GS_WAITSPLASH -> GS_INITBOUNCE (when START pressed)
+> 	//	GS_INITBOUNCE -> GS_BOUNCE
+> 	//	GS_BOUNCE -> GS_QUIT (when SELECT key pressed)
+> 	//	GS_BOUNCE -> GS_PAUSE (when A key pressed)
+> 	//	GS_PAUSE -> GS_BOUNCE (when A key pressed)
+> 	//	GS_QUIT -> GS_INITSPLASH (when SELECT key pressed)
+> 
+> 	cs.gamestate = GS_INITSPLASH;
+60a77,93
+> 		case GS_INITSPLASH:
+> 			// Set up the initial state
+> 			cs.size = 5;
+> 			cs.nballs = 0;
+> 			score = 0;
+> 
+> 			cs.splashnballs = 1;
+> 			for (int i = 0; i < MAX_BALLS; i++) {
+> 				cs.balls[i].row = 0;
+> 				cs.balls[i].col = 80 + i * 2 * cs.size;
+> 				cs.balls[i].rd = 1;
+> 				cs.balls[i].cd = 1;
+> 				cs.balls[i].color = colors[i % ncolors];
+> 			}
+> 
+> 			break;
+> 
+108a142,162
+> 		// Animate the splash screen — drop the balls one at a time
+> 		case GS_DRAWSPLASH:
+> 			bp = &cs.balls[cs.splashnballs - 1];
+> 			// When we've reached the bottom, start the next ball
+> 			if (bp->row >= SCREEN_HEIGHT - cs.size)
+> 				// Start the next ball
+> 				cs.splashnballs++;			else
+> 				// Move the current ball down by 4
+> 				bp->row += 4;
+> 			// Don't let the ball extend below the bottom
+> 			if (bp->row > SCREEN_HEIGHT - cs.size)
+> 				bp->row = SCREEN_HEIGHT - cs.size;
+> 			// Draw only the balls we've touched up to this point
+> 			if (cs.splashnballs <= MAX_BALLS)
+> 				cs.nballs = cs.splashnballs;
+> 
+> 			break;
+> 
+> 		case GS_WAITSPLASH:
+> 			break;
+> 
+121a176,181
+> 		case GS_PAUSE:
+> 			// We’re paused; don’t do anything until we see an A button
+> 			break;
+> 
+> 		case GS_QUIT:
+> 			break;
+130a191,231
+> 		case GS_INITSPLASH:
+> 			// clear the screen to bgcolor
+> 			drawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, bgcolor);
+> 
+> 			cs.gamestate = GS_DRAWSPLASH;
+> 			break;
+> 
+> 		// Do the splash screen animation
+> 		case GS_DRAWSPLASH:
+> 			// Erase the old balls
+> 			for (int i = 0; i < ps.nballs; i++) {
+> 				obp = &ps.balls[i];
+> 				drawRect(obp->row, obp->col,
+> 					ps.size, ps.size,
+> 					bgcolor);
+> 			}
+> 
+> 			// Draw the new balls
+> 			for (int i = 0; i < cs.nballs; i++) {
+> 				bp = &cs.balls[i];
+> 				drawRect(bp->row, bp->col,
+> 					cs.size, cs.size,
+> 					bp->color);
+> 			}
+> 
+> 			if (cs.splashnballs > MAX_BALLS)
+> 				cs.gamestate = GS_WAITSPLASH;
+> 			break;
+> 
+> 		// Wait for the START key
+> 		case GS_WAITSPLASH: {
+> 			char buffer[51];
+> 			sprintf(buffer, "Press START to play...");
+> 			drawRect(150, 5, 200, 10, bgcolor);
+> 			drawString(150, 5, buffer, YELLOW);
+> 
+> 			if (buttonJustReleased[BUTTON_START])
+> 				cs.gamestate = GS_INITBOUNCE;
+> 			break;
+> 		}
+> 
+140c241
+< 				obp = &ps.balls[i];
+---
+> 				struct ball *obp = &ps.balls[i];
+159a261,278
+> 			if (buttonJustReleased[BUTTON_A])
+> 				cs.gamestate = GS_PAUSE;
+> 			if (buttonJustReleased[BUTTON_SELECT])
+> 				cs.gamestate = GS_QUIT;
+> 			break;
+> 
+> 		// Pause the graphics
+> 		case GS_PAUSE:
+> 			if (buttonJustReleased[BUTTON_A])
+> 				cs.gamestate = GS_BOUNCE;
+> 			if (buttonJustReleased[BUTTON_SELECT])
+> 				cs.gamestate = GS_QUIT;
+> 			break;
+> 
+> 		case GS_QUIT:
+> 			drawString(SCREEN_HEIGHT / 2, (SCREEN_WIDTH - 9 * 6) / 2, "Game Over", RED);
+> 			if (buttonJustReleased[BUTTON_SELECT])
+> 				cs.gamestate = GS_INITSPLASH;
